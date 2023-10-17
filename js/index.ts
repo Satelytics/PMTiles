@@ -308,7 +308,6 @@ export class FetchSource implements Source {
       controller = new AbortController();
       signal = controller.signal;
     }
-
     const requestHeaders = new Headers(this.customHeaders);
     requestHeaders.set(
       "Range",
@@ -831,14 +830,16 @@ export class PMTiles {
   source: Source;
   cache: Cache;
   decompress: DecompressFunc;
+  customHeaders?: Headers;
 
   constructor(
     source: Source | string,
     cache?: Cache,
-    decompress?: DecompressFunc
+    decompress?: DecompressFunc,
+    customHeaders?: Headers
   ) {
     if (typeof source === "string") {
-      this.source = new FetchSource(source);
+      this.source = new FetchSource(source, customHeaders);
     } else {
       this.source = source;
     }
@@ -851,6 +852,11 @@ export class PMTiles {
       this.cache = cache;
     } else {
       this.cache = new SharedPromiseCache();
+    }
+    if (customHeaders) {
+      this.customHeaders = customHeaders;
+    } else {
+      this.customHeaders = undefined; 
     }
   }
 

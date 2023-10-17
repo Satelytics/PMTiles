@@ -154,7 +154,7 @@ export class Protocol {
 
       let instance = this.tiles.get(pmtiles_url);
       if (!instance) {
-        instance = new PMTiles(pmtiles_url);
+        instance = new PMTiles(pmtiles_url,undefined,undefined,params.headers);
         this.tiles.set(pmtiles_url, instance);
       }
       const z = result[2];
@@ -198,3 +198,88 @@ export class Protocol {
     }
   };
 }
+
+export class ProtocolServer {
+  tiles: Map<string, PMTiles>;
+
+  constructor() {
+    this.tiles = new Map<string, PMTiles>();
+  }
+
+  add(p: PMTiles) {
+    this.tiles.set(p.source.getKey(), p);
+  }
+
+  get(url: string) {
+    return this.tiles.get(url);
+  }
+
+  tile = (
+    params: RequestParameters,
+    callback: ResponseCallback
+  ): Cancelable => {
+      const re = new RegExp(/pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)/);
+      const result = params.url.match(re);
+      if (!result) {
+        throw new Error("Invalid PMTiles protocol URL");
+        return {
+          cancel: () => {},
+        };
+      }
+      const pmtiles_url = result[1];
+// we don't have instance anymore. We need to call the header and tile endpoints
+    //
+   let domainName;
+   let pathParams;
+      const controller = new AbortController();
+      const signal = controller.signal;
+      let cancel = () => {
+        controller.abort();
+      };
+
+    try {
+  const parsedUrl = new URL(pmtiles_url);
+  domainName = parsedUrl.hostname;
+  pathParams = parsedUrl.pathname.split('/').filter(param => param !== ''); // Split the pathname by '/' and remove empty elements
+} catch (error) {
+  console.error("Invalid URL:", error);
+      return {
+        cancel: cancel,
+      };
+}
+      const z = result[2];
+      const x = result[3];
+      const y = result[4];
+
+    fetch(`https://${domainName}/header/${pathParams[0]}/${pathParams[1]}`, {headers:params.headers})
+      .then(response => {
+        response.json().then((header) => {
+           fetch(`https://${domainName}/tile/${pathParams[0]}/${pathParams[1]}/${z}/${x}/${y}`, {headers:params.headers}) 
+           .then(response => {
+            if (response) {
+                response.arrayBuffer().then((arrayBuffer) => {
+                  callback(null, new Uint8Array(arrayBuffer), null, null);
+                })
+            } else {
+              if (header.tile_type == TileType.Mvt) {
+                callback(null, new Uint8Array(), null, null);
+              } else {
+                callback(null, null, null, null);
+              }
+            } 
+            })
+            
+        })
+      })
+      .catch((e) => {
+            if ((e as Error).name !== "AbortError") {
+              callback(e, null, null, null);
+            }
+          });
+
+      return {
+        cancel: cancel,
+      };
+    };
+};
+
